@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/shadcn_colors.dart';
 
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light; // Default to light mode
   Color _primaryColor = const Color(0xFF18181B); // Default Zinc
 
   ThemeMode get themeMode => _themeMode;
@@ -87,7 +87,8 @@ class ThemeProvider extends ChangeNotifier {
 
   void _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final modeIndex = prefs.getInt('theme_mode') ?? 0;
+    final modeIndex =
+        prefs.getInt('theme_mode') ?? 1; // Default to light (index 1)
     _themeMode = ThemeMode.values[modeIndex];
 
     final colorVal = prefs.getInt('primary_color');
