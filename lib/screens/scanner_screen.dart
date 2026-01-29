@@ -1,14 +1,9 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image/image.dart' as img;
-import 'package:zxing_lib/common.dart';
-import 'package:zxing_lib/zxing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/shadcn_ui.dart';
 import '../providers/theme_provider.dart';
@@ -25,9 +20,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
   MobileScannerController? _mobileController;
   bool _isUrl = false;
   String? _faviconUrl;
-
-  bool get isDesktop =>
-      !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
   bool _isValidUrl(String text) {
     try {
@@ -97,7 +89,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void initState() {
     super.initState();
     debugPrint('🔍 Scanner: initState called');
-    debugPrint('🔍 Scanner: isDesktop = $isDesktop');
     _mobileController = MobileScannerController();
     debugPrint('🔍 Scanner: MobileScannerController created');
   }
@@ -109,259 +100,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
     super.dispose();
   }
 
-  // Desktop only: Pick image from file
-  Future<void> _pickImage() async {
-    debugPrint('📸 Scanner: _pickImage called (Desktop)');
-
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-    );
-
-    if (result != null && result.files.single.path != null) {
-      final path = result.files.single.path!;
-      debugPrint('📸 Scanner: Image path = $path');
-
-      try {
-        final File imageFile = File(path);
-        final bytes = await imageFile.readAsBytes();
-        final image = img.decodeImage(bytes);
-
-        if (image == null) {
-          setState(() {
-            _scanResult = "Failed to decode image.";
-          });
-          return;
-        }
-
-        // Simple processing for desktop
-        final width = image.width;
-        final height = image.height;
-        final pixels = <int>[];
-
-        for (int y = 0; y < height; y++) {
-          for (int x = 0; x < width; x++) {
-            final pixel = image.getPixel(x, y);
-            final gray =
-                ((pixel.r.toInt() + pixel.g.toInt() + pixel.b.toInt()) ~/ 3);
-            pixels.add(gray);
-          }
-        }
-
-        final source = RGBLuminanceSource(width, height, pixels);
-        final bitmap = BinaryBitmap(HybridBinarizer(source));
-
-        try {
-          final reader = MultiFormatReader();
-          final result = reader.decode(bitmap);
-          _updateScanResult(result.text);
-        } catch (e) {
-          setState(() {
-            _scanResult = "No QR code found in image.";
-          });
-        }
-      } catch (e) {
-        setState(() {
-          _scanResult = "Error: ${e.toString()}";
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     debugPrint('🎨 Scanner: build called');
     final theme = Provider.of<ThemeProvider>(context);
-    debugPrint('🎨 Scanner: isDesktop = $isDesktop');
     debugPrint('🎨 Scanner: _scanResult = $_scanResult');
-
-    if (isDesktop) {
-      debugPrint('🎨 Scanner: Rendering desktop UI');
-      return Scaffold(
-        backgroundColor: theme.background,
-        appBar: AppBar(
-          backgroundColor: theme.background,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text(
-            'Scanner',
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w600,
-              color: theme.foreground,
-            ),
-          ),
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 20),
-
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: theme.muted.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: theme.border,
-                    width: 2,
-                    style: BorderStyle.solid,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.image_search, size: 60, color: theme.primary),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Scan from Image",
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: theme.foreground,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Select a QR code image from your computer to scan it.",
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: theme.mutedForeground,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    ShadcnButton(
-                      text: "Select Image",
-                      fullWidth: true,
-                      icon: const Icon(Icons.upload_file, size: 18),
-                      onPressed: _pickImage,
-                    ),
-                  ],
-                ),
-              ),
-
-              if (_scanResult != null) ...[
-                const SizedBox(height: 20),
-                ShadcnCard(
-                  title: "Scan Result",
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Favicon and URL/Text display
-                      if (_isUrl && _faviconUrl != null)
-                        Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: theme.muted,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.network(
-                                  _faviconUrl!,
-                                  width: 40,
-                                  height: 40,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Icon(
-                                      Icons.language,
-                                      color: theme.primary,
-                                      size: 24,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Website Link',
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: theme.mutedForeground,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    Uri.parse(_scanResult!).host,
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      color: theme.foreground,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-
-                      if (_isUrl && _faviconUrl != null)
-                        const SizedBox(height: 12),
-
-                      // Result text box
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.muted.withValues(alpha: 0.5),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: theme.border),
-                        ),
-                        child: SelectableText(
-                          _scanResult!,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: theme.foreground,
-                            fontFeatures: [const FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Action buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ShadcnButton(
-                              text: "Copy",
-                              icon: const Icon(Icons.copy, size: 16),
-                              onPressed: _copyToClipboard,
-                              outline: true,
-                            ),
-                          ),
-                          if (_isUrl) ...[
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ShadcnButton(
-                                text: "Open",
-                                icon: const Icon(Icons.open_in_new, size: 16),
-                                onPressed: _openUrl,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      );
-    }
 
     // Mobile / Web Camera Scanner
     debugPrint('🎨 Scanner: Rendering mobile/web UI');

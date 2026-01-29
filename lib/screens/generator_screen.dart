@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -93,7 +92,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
           // Web: Direct download
           await downloadQrWeb(
             pngBytes,
-            'qr_code_${DateTime.now().millisecondsSinceEpoch}.png',
+            'g-enqr_${DateTime.now().millisecondsSinceEpoch}.png',
           );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -103,33 +102,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
               ),
             );
           }
-        } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-          // Desktop: Save File Dialog
-          String? outputFile = await FilePicker.platform.saveFile(
-            dialogTitle: 'Save QR Code',
-            fileName: 'qr_code_${DateTime.now().millisecondsSinceEpoch}.png',
-            type: FileType.image,
-            allowedExtensions: ['png'],
-          );
-
-          if (outputFile != null) {
-            if (!outputFile.endsWith('.png')) outputFile += '.png';
-            final file = File(outputFile);
-            await file.writeAsBytes(pngBytes);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text("✅ Saved successfully!"),
-                  backgroundColor: color,
-                ),
-              );
-            }
-          }
         } else {
           // Mobile: Share QR code
           final directory = await getTemporaryDirectory();
           final fileName =
-              'qr_code_${DateTime.now().millisecondsSinceEpoch}.png';
+              'g-enqr_${DateTime.now().millisecondsSinceEpoch}.png';
           final file = File('${directory.path}/$fileName');
           await file.writeAsBytes(pngBytes);
 
@@ -168,8 +145,6 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Provider.of<ThemeProvider>(context);
-    final bool isDesktop =
-        !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
     Color qrDotColor = theme.primary;
     Color qrBgColor = Colors.white;
@@ -182,18 +157,18 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     return Scaffold(
       backgroundColor: theme.background,
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(isDesktop ? 16.0 : 24.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox(height: isDesktop ? 16 : 24),
+            const SizedBox(height: 24),
 
             // QR Display Card - Rounded Style Only
             Center(
               child: RepaintBoundary(
                 key: _qrKey,
                 child: Container(
-                  padding: EdgeInsets.all(isDesktop ? 16 : 24),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: qrBgColor,
                     borderRadius: BorderRadius.circular(20),
@@ -210,7 +185,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                   child: QrImageView(
                     data: _qrData,
                     version: QrVersions.auto,
-                    size: isDesktop ? 160.0 : 200.0,
+                    size: 200.0,
                     eyeStyle: QrEyeStyle(
                       eyeShape: QrEyeShape.circle,
                       color: qrDotColor,
@@ -224,7 +199,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
               ),
             ),
 
-            SizedBox(height: isDesktop ? 20 : 30),
+            const SizedBox(height: 30),
 
             ShadcnCard(
               title: "Content",
@@ -233,7 +208,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                 children: [
                   ShadcnInput(
                     controller: _textController,
-                    placeholder: "https://example.com",
+                    placeholder: "https://ankesh.vercel.app",
                     onChanged: (val) {
                       setState(() {
                         _qrData = val;
@@ -244,12 +219,9 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                   ShadcnButton(
                     text: _saving
                         ? "Processing..."
-                        : (kIsWeb ||
-                              (!Platform.isWindows &&
-                                  !Platform.isLinux &&
-                                  !Platform.isMacOS))
-                        ? "Share QR Code"
-                        : "Save QR Code",
+                        : kIsWeb
+                        ? "Download QR"
+                        : "Share QR Code",
                     fullWidth: true,
                     icon: _saving
                         ? SizedBox(
@@ -260,15 +232,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                               color: theme.primaryForeground,
                             ),
                           )
-                        : Icon(
-                            (kIsWeb ||
-                                    (!Platform.isWindows &&
-                                        !Platform.isLinux &&
-                                        !Platform.isMacOS))
-                                ? Icons.share
-                                : Icons.download,
-                            size: 18,
-                          ),
+                        : Icon(kIsWeb ? Icons.download : Icons.share, size: 18),
                     onPressed: _saving ? null : () => _saveQr(theme.primary),
                   ),
                 ],
