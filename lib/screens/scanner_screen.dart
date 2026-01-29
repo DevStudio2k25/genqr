@@ -33,8 +33,27 @@ class _ScannerScreenState extends State<ScannerScreen> {
   String _getFaviconUrl(String url) {
     try {
       final uri = Uri.parse(url);
-      return 'https://www.google.com/s2/favicons?domain=${uri.host}&sz=64';
+      final domain = uri.host;
+
+      // Try multiple favicon services
+      final option1 = 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+      final option2 = 'https://icons.duckduckgo.com/ip3/$domain.ico';
+      final option3 = 'https://favicon.im/$domain?larger=true';
+      final option4 = 'https://$domain/favicon.ico';
+      final option5 =
+          'https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://$domain&size=64';
+
+      debugPrint('🔍 Favicon Options for $domain:');
+      debugPrint('  Option 1 (Google): $option1');
+      debugPrint('  Option 2 (DuckDuckGo): $option2');
+      debugPrint('  Option 3 (Favicon.im): $option3');
+      debugPrint('  Option 4 (Direct): $option4');
+      debugPrint('  Option 5 (Google V2): $option5');
+
+      // Return Google V2 (most reliable)
+      return option5;
     } catch (e) {
+      debugPrint('❌ Favicon error: $e');
       return '';
     }
   }
