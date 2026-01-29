@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'dart:io' show Platform;
@@ -11,6 +12,9 @@ import 'utils/responsive_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Hide system UI overlays (status bar and navigation bar)
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   if (!kIsWeb) {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

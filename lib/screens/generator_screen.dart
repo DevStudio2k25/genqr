@@ -49,21 +49,41 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
 
         final painter = QrPainter.withQr(
           qr: qrCode,
-          eyeStyle: const QrEyeStyle(
+          eyeStyle: QrEyeStyle(
             eyeShape: QrEyeShape.circle,
-            color: Colors.black,
+            color: color, // Use theme color
           ),
-          dataModuleStyle: const QrDataModuleStyle(
+          dataModuleStyle: QrDataModuleStyle(
             dataModuleShape: QrDataModuleShape.circle,
-            color: Colors.black,
+            color: color, // Use theme color
           ),
           gapless: true,
         );
 
-        final picData = await painter.toImageData(
-          2048,
-          format: ui.ImageByteFormat.png,
+        // Create image with white background and padding
+        final qrSize = 2048;
+        final padding = 200;
+        final totalSize = qrSize + (padding * 2);
+
+        final recorder = ui.PictureRecorder();
+        final canvas = Canvas(recorder);
+
+        // Draw white background
+        final bgPaint = Paint()..color = Colors.white;
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, totalSize.toDouble(), totalSize.toDouble()),
+          bgPaint,
         );
+
+        // Draw QR code with padding
+        canvas.save();
+        canvas.translate(padding.toDouble(), padding.toDouble());
+        painter.paint(canvas, Size(qrSize.toDouble(), qrSize.toDouble()));
+        canvas.restore();
+
+        final picture = recorder.endRecording();
+        final img = await picture.toImage(totalSize, totalSize);
+        final picData = await img.toByteData(format: ui.ImageByteFormat.png);
         if (picData == null) throw Exception("Failed to generate QR image");
 
         final pngBytes = picData.buffer.asUint8List();
@@ -105,20 +125,44 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
             }
           }
         } else {
-          // Mobile: Save to Downloads
-          final directory = Platform.isAndroid
-              ? Directory('/storage/emulated/0/Download')
-              : await getApplicationDocumentsDirectory();
+          // Mobile: Save to DCIM/GenQR for gallery
+          Directory? directory;
+
+          if (Platform.isAndroid) {
+            directory = Directory('/storage/emulated/0/DCIM/GenQR');
+            if (!await directory.exists()) {
+              await directory.create(recursive: true);
+            }
+          } else {
+            directory = await getApplicationDocumentsDirectory();
+          }
 
           final fileName =
               'qr_code_${DateTime.now().millisecondsSinceEpoch}.png';
           final file = File('${directory.path}/$fileName');
           await file.writeAsBytes(pngBytes);
 
+          // Notify Android gallery
+          if (Platform.isAndroid) {
+            try {
+              await Process.run('am', [
+                'broadcast',
+                '-a',
+                'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
+                '-d',
+                'file://${file.path}',
+              ]);
+            } catch (e) {
+              debugPrint('Gallery notify failed: $e');
+            }
+          }
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text("✅ Saved to ${directory.path}/$fileName"),
+                content: Text(
+                  "✅ Saved to ${Platform.isAndroid ? 'Gallery' : 'Documents'}",
+                ),
                 backgroundColor: color,
                 duration: const Duration(seconds: 3),
               ),

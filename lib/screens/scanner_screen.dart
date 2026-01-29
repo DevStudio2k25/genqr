@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image/image.dart' as img;
 import 'package:zxing_lib/common.dart';
 import 'package:zxing_lib/zxing.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/shadcn_ui.dart';
 import '../providers/theme_provider.dart';
 
@@ -21,9 +23,75 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   String? _scanResult;
   MobileScannerController? _mobileController;
+  bool _isUrl = false;
+  String? _faviconUrl;
 
   bool get isDesktop =>
       !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+
+  bool _isValidUrl(String text) {
+    try {
+      final uri = Uri.parse(text);
+      return uri.hasScheme && (uri.scheme == 'http' || uri.scheme == 'https');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  String _getFaviconUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return 'https://www.google.com/s2/favicons?domain=${uri.host}&sz=64';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  void _updateScanResult(String result) {
+    setState(() {
+      _scanResult = result;
+      _isUrl = _isValidUrl(result);
+      if (_isUrl) {
+        _faviconUrl = _getFaviconUrl(result);
+        debugPrint('🌐 Scanner: URL detected = $result');
+        debugPrint('🌐 Scanner: Favicon URL = $_faviconUrl');
+      } else {
+        _faviconUrl = null;
+        debugPrint('📝 Scanner: Text detected = $result');
+      }
+    });
+  }
+
+  Future<void> _copyToClipboard() async {
+    if (_scanResult != null) {
+      await Clipboard.setData(ClipboardData(text: _scanResult!));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Copied to clipboard!'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      debugPrint('📋 Scanner: Copied to clipboard');
+    }
+  }
+
+  Future<void> _openUrl() async {
+    if (_scanResult != null && _isUrl) {
+      try {
+        final uri = Uri.parse(_scanResult!);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          debugPrint('🌐 Scanner: Opened URL = $_scanResult');
+        } else {
+          debugPrint('❌ Scanner: Cannot launch URL = $_scanResult');
+        }
+      } catch (e) {
+        debugPrint('❌ Scanner: Error opening URL = $e');
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -102,9 +170,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           debugPrint('✅ Scanner: QR code decoded successfully!');
           debugPrint('✅ Scanner: Result = ${result.text}');
 
-          setState(() {
-            _scanResult = result.text;
-          });
+          _updateScanResult(result.text);
         } catch (e) {
           debugPrint('❌ Scanner: No QR code found in image');
           debugPrint('❌ Scanner: Error = $e');
@@ -205,13 +271,75 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ShadcnCard(
                   title: "Scan Result",
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Favicon and URL/Text display
+                      if (_isUrl && _faviconUrl != null)
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: theme.muted,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  _faviconUrl!,
+                                  width: 40,
+                                  height: 40,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Icon(
+                                      Icons.language,
+                                      color: theme.primary,
+                                      size: 24,
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Website Link',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: theme.mutedForeground,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    Uri.parse(_scanResult!).host,
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: theme.foreground,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+
+                      if (_isUrl && _faviconUrl != null)
+                        const SizedBox(height: 12),
+
+                      // Result text box
                       Container(
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: theme.muted.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: theme.border),
                         ),
                         child: SelectableText(
                           _scanResult!,
@@ -222,14 +350,31 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      ShadcnButton(
-                        text: "Copy Result",
-                        icon: const Icon(Icons.copy, size: 16),
-                        onPressed: () {
-                          // Copy clipboard logic here if needed
-                          // Clipboard.setData(ClipboardData(text: _scanResult!));
-                        },
+
+                      const SizedBox(height: 16),
+
+                      // Action buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ShadcnButton(
+                              text: "Copy",
+                              icon: const Icon(Icons.copy, size: 16),
+                              onPressed: _copyToClipboard,
+                              outline: true,
+                            ),
+                          ),
+                          if (_isUrl) ...[
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ShadcnButton(
+                                text: "Open",
+                                icon: const Icon(Icons.open_in_new, size: 16),
+                                onPressed: _openUrl,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -278,9 +423,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                   if (code != null) {
                     debugPrint('✅ Scanner: QR code detected from camera!');
-                    setState(() {
-                      _scanResult = code;
-                    });
+                    _updateScanResult(code);
                   } else {
                     debugPrint('⚠️ Scanner: Barcode rawValue is null');
                   }
@@ -495,6 +638,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           onPressed: () {
                             setState(() {
                               _scanResult = null;
+                              _isUrl = false;
+                              _faviconUrl = null;
                             });
                             _mobileController?.start();
                           },
@@ -503,24 +648,121 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
+
+                    // Favicon and URL/Text display
+                    if (_isUrl && _faviconUrl != null)
+                      Row(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: theme.muted,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                _faviconUrl!,
+                                width: 48,
+                                height: 48,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Icon(
+                                    Icons.language,
+                                    color: theme.primary,
+                                    size: 28,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Website Link',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    color: theme.mutedForeground,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  Uri.parse(_scanResult!).host,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 16,
+                                    color: theme.foreground,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    if (_isUrl && _faviconUrl != null)
+                      const SizedBox(height: 16),
+
+                    // Result text box
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
                         color: theme.muted.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.border),
                       ),
-                      child: Text(
+                      child: SelectableText(
                         _scanResult!,
-                        style: GoogleFonts.inter(color: theme.foreground),
+                        style: GoogleFonts.inter(
+                          color: theme.foreground,
+                          fontSize: 14,
+                        ),
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ShadcnButton(
+                            text: "Copy",
+                            icon: const Icon(Icons.copy, size: 18),
+                            onPressed: _copyToClipboard,
+                            outline: true,
+                          ),
+                        ),
+                        if (_isUrl) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ShadcnButton(
+                              text: "Open",
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              onPressed: _openUrl,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
                     ShadcnButton(
                       text: "Scan Again",
                       fullWidth: true,
+                      ghost: true,
                       onPressed: () {
                         setState(() {
                           _scanResult = null;
+                          _isUrl = false;
+                          _faviconUrl = null;
                         });
                         _mobileController?.start();
                       },
