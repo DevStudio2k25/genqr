@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../widgets/shadcn_ui.dart';
 import '../providers/theme_provider.dart';
 import 'generator_screen_web.dart'
@@ -125,46 +126,22 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
             }
           }
         } else {
-          // Mobile: Save to DCIM/GenQR for gallery
-          Directory? directory;
-
-          if (Platform.isAndroid) {
-            directory = Directory('/storage/emulated/0/DCIM/GenQR');
-            if (!await directory.exists()) {
-              await directory.create(recursive: true);
-            }
-          } else {
-            directory = await getApplicationDocumentsDirectory();
-          }
-
+          // Mobile: Share QR code
+          final directory = await getTemporaryDirectory();
           final fileName =
               'qr_code_${DateTime.now().millisecondsSinceEpoch}.png';
           final file = File('${directory.path}/$fileName');
           await file.writeAsBytes(pngBytes);
 
-          // Notify Android gallery
-          if (Platform.isAndroid) {
-            try {
-              await Process.run('am', [
-                'broadcast',
-                '-a',
-                'android.intent.action.MEDIA_SCANNER_SCAN_FILE',
-                '-d',
-                'file://${file.path}',
-              ]);
-            } catch (e) {
-              debugPrint('Gallery notify failed: $e');
-            }
-          }
+          // Share the file
+          await Share.shareXFiles([XFile(file.path)], text: 'QR Code');
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  "✅ Saved to ${Platform.isAndroid ? 'Gallery' : 'Documents'}",
-                ),
+                content: const Text("✅ Share QR Code"),
                 backgroundColor: color,
-                duration: const Duration(seconds: 3),
+                duration: const Duration(seconds: 2),
               ),
             );
           }
@@ -265,7 +242,14 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                   ),
                   const SizedBox(height: 16),
                   ShadcnButton(
-                    text: _saving ? "Saving..." : "Save QR Code",
+                    text: _saving
+                        ? "Processing..."
+                        : (kIsWeb ||
+                              (!Platform.isWindows &&
+                                  !Platform.isLinux &&
+                                  !Platform.isMacOS))
+                        ? "Share QR Code"
+                        : "Save QR Code",
                     fullWidth: true,
                     icon: _saving
                         ? SizedBox(
@@ -276,7 +260,15 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                               color: theme.primaryForeground,
                             ),
                           )
-                        : const Icon(Icons.download, size: 18),
+                        : Icon(
+                            (kIsWeb ||
+                                    (!Platform.isWindows &&
+                                        !Platform.isLinux &&
+                                        !Platform.isMacOS))
+                                ? Icons.share
+                                : Icons.download,
+                            size: 18,
+                          ),
                     onPressed: _saving ? null : () => _saveQr(theme.primary),
                   ),
                 ],

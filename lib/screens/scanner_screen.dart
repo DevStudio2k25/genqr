@@ -109,37 +109,31 @@ class _ScannerScreenState extends State<ScannerScreen> {
     super.dispose();
   }
 
+  // Desktop only: Pick image from file
   Future<void> _pickImage() async {
-    debugPrint('📸 Scanner: _pickImage called');
+    debugPrint('📸 Scanner: _pickImage called (Desktop)');
+
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.image,
     );
-    debugPrint('📸 Scanner: FilePicker result = ${result?.files.single.path}');
 
     if (result != null && result.files.single.path != null) {
       final path = result.files.single.path!;
       debugPrint('📸 Scanner: Image path = $path');
 
       try {
-        debugPrint('📸 Scanner: Reading image file...');
         final File imageFile = File(path);
         final bytes = await imageFile.readAsBytes();
-        debugPrint('📸 Scanner: Image bytes length = ${bytes.length}');
-
         final image = img.decodeImage(bytes);
-        debugPrint(
-          '📸 Scanner: Image decoded, size = ${image?.width}x${image?.height}',
-        );
 
         if (image == null) {
-          debugPrint('❌ Scanner: Failed to decode image');
           setState(() {
             _scanResult = "Failed to decode image.";
           });
           return;
         }
 
-        debugPrint('📸 Scanner: Converting to grayscale...');
+        // Simple processing for desktop
         final width = image.width;
         final height = image.height;
         final pixels = <int>[];
@@ -147,46 +141,29 @@ class _ScannerScreenState extends State<ScannerScreen> {
         for (int y = 0; y < height; y++) {
           for (int x = 0; x < width; x++) {
             final pixel = image.getPixel(x, y);
-            final r = pixel.r.toInt();
-            final g = pixel.g.toInt();
-            final b = pixel.b.toInt();
-            final gray = (r + g + b) ~/ 3;
+            final gray =
+                ((pixel.r.toInt() + pixel.g.toInt() + pixel.b.toInt()) ~/ 3);
             pixels.add(gray);
           }
         }
-        debugPrint(
-          '📸 Scanner: Grayscale conversion complete, pixels = ${pixels.length}',
-        );
 
-        debugPrint('📸 Scanner: Creating luminance source...');
         final source = RGBLuminanceSource(width, height, pixels);
         final bitmap = BinaryBitmap(HybridBinarizer(source));
-        debugPrint('📸 Scanner: BinaryBitmap created');
 
         try {
-          debugPrint('📸 Scanner: Decoding QR code...');
           final reader = MultiFormatReader();
           final result = reader.decode(bitmap);
-          debugPrint('✅ Scanner: QR code decoded successfully!');
-          debugPrint('✅ Scanner: Result = ${result.text}');
-
           _updateScanResult(result.text);
         } catch (e) {
-          debugPrint('❌ Scanner: No QR code found in image');
-          debugPrint('❌ Scanner: Error = $e');
           setState(() {
             _scanResult = "No QR code found in image.";
           });
         }
       } catch (e) {
-        debugPrint('❌ Scanner: Error processing image');
-        debugPrint('❌ Scanner: Error = $e');
         setState(() {
           _scanResult = "Error: ${e.toString()}";
         });
       }
-    } else {
-      debugPrint('📸 Scanner: No image selected');
     }
   }
 
@@ -542,7 +519,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           // Instructions text
           if (_scanResult == null)
             Positioned(
-              bottom: 180,
+              bottom: 60,
               left: 0,
               right: 0,
               child: Text(
@@ -552,51 +529,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   color: theme.foreground,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-
-          // Gallery button at bottom
-          if (_scanResult == null)
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Column(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: theme.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.primary.withValues(alpha: 0.4),
-                            blurRadius: 20,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.photo_library,
-                          color: theme.primaryForeground,
-                          size: 28,
-                        ),
-                        onPressed: _pickImage,
-                        iconSize: 60,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Pick from Gallery",
-                      style: GoogleFonts.inter(
-                        color: theme.foreground,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
