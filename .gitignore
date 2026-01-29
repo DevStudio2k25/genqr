@@ -31,6 +31,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+# Keep web build for Vercel
+!/build/web/
 /coverage/
 
 # Symbolication related
